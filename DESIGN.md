@@ -68,9 +68,9 @@ sequenceDiagram
     Client-->>Redis: Subscribe to sw:<type>:act:<id>:events
     Worker->>Redis: XREADGROUP from type stream
     Worker->>Redis: Acquire lease (SET NX PX)
+    Worker->>Redis: Lua start (status=running, publish lease_acquired)
     Redis-->>Client: action Event (event: "lease_acquired")
     Client->>Client: Ignores event
-    Worker->>Redis: Lua start (status=running, publish lease_acquired)
     Worker->>Worker: Execute handler, renew lease
     Worker->>Redis: Lua terminalize (status=done|failed, publish event)
     Worker->>Redis: XACKDEL + DELREF stream entry
