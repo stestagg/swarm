@@ -134,6 +134,36 @@ Workers refresh `sw:meta:workers:<worker_id>` using `SETEX`, storing:
 
 This key is the only cross-type structure and enables fleet observability.
 
+## Worker Responsibilities and Behaviour
+
+Workers are the execution surface of the swarm. A single worker instance may support **one or many action types**. For each type
+it advertises in its metadata, it must actively consume the corresponding dispatch stream (and any sharded variants) so that
+eligible work is claimed promptly.
+
+Workers are allowed to orchestrate additional actions as part of their handlers. However, to avoid self-induced deadlocks, a
+worker that submits a sub-action whose type it can also execute has two choices when it needs to await the result:
+
+1. **Run inline:** execute the sub-action directly within the parent handler without releasing control to Redis; or
+2. **Pump while waiting:** if the sub-action is left in Redis, the worker must poll for that type and execute any pending actions
+   (including the one it is waiting on) in a loop while awaiting completion.
+
+Action results are intentionally small. Result payloads stored on the action hash should only contain trivial metadata or
+pointers (e.g. URLs, object storage keys) to externally persisted artefacts. Redis is not a durable content store; worker code
+should assume that stored results may be evicted and therefore persist substantive outputs in external systems. A common pattern
+is to check the external location first and short-circuit execution if a previous run has already produced the artefact.
+
+Workers must emit periodic heartbeats to their metadata key (`sw:meta:workers:<worker_id>`) to prove liveness and advertise
+capabilities. The metadata should enumerate the handled action types as well as any interface or version information that helps
+operators understand compatibility. The exact encoding of these capabilities is still to be decided, but the presence of the
+data enables basic observability.
+
+Additional operational guidance:
+
+- Workers should treat leases as exclusive locks for the duration of action execution and renew them frequently.
+- Handlers must be idempotent, as retries can occur after crashes or lease expiries.
+- When scaling concurrency, prefer separate processes per action type when behaviour diverges significantly to simplify
+  deployments and observability.
+
 ## Scaling and Sharding
 
 Per-type isolation simplifies scaling. When a type becomes hot, operators may shard its dispatch stream into `sw:<type>:dispatch:<shard>` and route actions by `hash(id) % shard_count`. All other semantics remain unchanged, and each shard maintains its own consumer group.
