@@ -65,15 +65,18 @@ sequenceDiagram
     participant Redis
     participant Worker
     Client->>Redis: Lua submit (create envelope, enqueue)
+    Client-->>Redis: Subscribe to sw:<type>:act:<id>:events
     Worker->>Redis: XREADGROUP from type stream
     Worker->>Redis: Acquire lease (SET NX PX)
+    Redis-->>Client: action Event (event: "lease_acquired")
+    Client->>Client: Ignores event
     Worker->>Redis: Lua start (status=running, publish lease_acquired)
     Worker->>Worker: Execute handler, renew lease
     Worker->>Redis: Lua terminalize (status=done|failed, publish event)
     Worker->>Redis: XACKDEL + DELREF stream entry
-    Client-->>Redis: Subscribe to sw:<type>:act:<id>:events
-    Redis-->>Client: Broadcast result/error event
+    Redis-->>Client: action Event (event: "result_set")
     Client->>Redis: Re-fetch action hash
+    Client->>Redis: Unsubscribe from sw:<type>:act:<id>:events
 ```
 
 ### Submission (write-before-notify)
