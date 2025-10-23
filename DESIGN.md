@@ -86,7 +86,7 @@ sequenceDiagram
 ### Dispatch and Leasing
 
 1. Workers issue `XREADGROUP GROUP sw:<type>:cg <consumer> ... STREAMS sw:<type>:dispatch >` to claim pending entries.
-2. For each entry, the worker fetches the action hash. Missing or terminal actions result in an `XACK` and skip.
+2. For each entry, the worker fetches the action hash. Missing or terminal actions result in an `XACKDEL` and skip.
 3. Lease acquisition uses `SET sw:<type>:act:<id>:lease <token> NX PX <lease_ms>`. Failure indicates another worker holds the lease, so the entry is acknowledged and dropped.
 4. Upon lease success, a Lua script marks the action `status=running`, sets `latest_expected_completion` based on `TIME`, and publishes `lease_acquired`.
 5. Workers renew the lease periodically with `SET XX PX <lease_ms>` while executing user code.
